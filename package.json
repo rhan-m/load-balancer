@@ -1,0 +1,13 @@
+{
+  "name": "load-balancer",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "http",
+    "load-balancer",
+    "shared"
+  ],
+  "dependencies": {
+    "http-proxy": "^1.18.1"
+  }
+}
