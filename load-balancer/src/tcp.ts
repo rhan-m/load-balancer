@@ -1,110 +1,104 @@
-import { Request, Response, Express } from 'express';
-import 'dotenv/config';
+import { LoadBalancer } from "./loadbalancer";
+import { Request, Response } from 'express';
 import net from 'net';
-import './loadbalancer'
-import { LoadBalancer } from './loadbalancer';
 
-export interface ConnectionInfo {
+
+interface ConnectionInfo {
 	host: string;
 	netConnection: net.Socket;
 	id: number;
-	port: number;
+	port: number
 }
 
-export class TCPLoadBalancer implements LoadBalancer{
-	private currentConnectionId = 0;
-	private PORT = process.env.PORT;
+export class TCPLoadBalancer implements LoadBalancer {
+    private current_connection_id = 0;
+    private connections: ConnectionInfo[] = [];
+    private available_connections: ConnectionInfo[] = [];
+    private current_connection: ConnectionInfo | undefined; 
 
-	private connections: ConnectionInfo[] = [];
-	private availableConnections: ConnectionInfo[] = [];
-	private currentConnection: ConnectionInfo | undefined;
+    constructor() {
+        this.setupConnections();
+    }
 
-	constructor(app: Express) {
-		this.setupListeners(app);
-	}
+    private setupConnections() {
+        let hosts = process.env.TCP_HOSTS?.split(';')!;
+        this.establishConnections(hosts);
+    }
 
-	private setupListeners(app: Express): void {
-		app.listen(this.PORT, () => {
-			console.log(`Load balancer listening on port ${this.PORT}`);
-			const hosts = process.env.TCP_HOSTS?.split(';')!;
-			this.establishConnections(hosts);
-		});
-	}
+    private establishConnections(hosts: string[]) {
+        hosts.forEach(host => {
+            let info = host.split(':');
+            let parsedPort = Number.parseInt(info[1]);
+            let parsedHost = info[0];
+            let connection = net.createConnection(parsedPort, parsedHost, () => {		
+            });
+            this.connections.push({
+                host: parsedHost,
+                netConnection: connection,
+                id: this.current_connection_id,
+                port: parsedPort
+            });
+            this.current_connection_id++;
+        });
+    }
 
-	private waitForData(client: net.Socket): Promise<Buffer> {
-		return new Promise((resolve) => {
-			client.on('data', (data) => {
-				resolve(data);
-			});
-		});
-	}
+    private async proxyRequest(req: Request, client: net.Socket) {
+        client.write(JSON.stringify(this.parseRequest(req)));
+        try {
+            const data = await this.waitForData(client);
+            req.socket.write(data);
+        } catch (error) {
+            console.log(error);
+        }
+    }
+    
+    
+    async resolveRequest(req: Request, res: Response): Promise<void> {
+        try {
+            let client = this.roundRobin();
+            await this.proxyRequest(req, client);
+        } catch (error) {
+            console.log(error);
+        }
+    }
+    
+    private roundRobin(): net.Socket {
+        this.checkConnections();
+        if (this.current_connection === undefined || this.current_connection.id === this.available_connections.length - 1) {
+            this.current_connection = this.available_connections[0];
+        } else {
+            this.current_connection = this.available_connections[this.current_connection.id + 1];
+        }
+        return this.current_connection.netConnection;
+    }
+    
+    private checkConnections() {
+        this.available_connections = []
+        this.connections.forEach(connection => {
+            if(!connection.netConnection.writable) {
+                connection.netConnection.destroy();
+                connection.netConnection = net.createConnection(connection.port, connection.host, () => {		
+                });
+            }
+            this.available_connections.push(connection);
+        })
+    }
 
-	private parseRequest(req: Request): string {
-		return JSON.stringify({
-			body: req.body,
-			url: req.url,
-			method: req.method,
-			headers: req.headers,
-		});
-	}
 
-	private async proxyRequest(req: Request, client: net.Socket): Promise<void> {
-		client.write(this.parseRequest(req));
-		try {
-			const data = await this.waitForData(client);
-			req.socket.write(data);
-		} catch (error) {
-			console.log(error);
-		}
-	}
+    private waitForData(client: net.Socket): Promise<Buffer> {
+        return new Promise((resolve) => {
+            client.on('data', (data) => {
+                resolve(data);
+            });
+        });
+    }
 
-	private establishConnections(hosts: string[]): void {
-		hosts.forEach((host) => {
-			const info = host.split(':');
-			const parsedPort = Number.parseInt(info[1]);
-			const parsedHost = info[0];
-			const connection = net.createConnection(parsedPort, parsedHost, () => {});
-			this.connections.push({
-				host: parsedHost,
-				netConnection: connection,
-				id: this.currentConnectionId,
-				port: parsedPort,
-			});
-			this.currentConnectionId++;
-		});
-	}
-
-	async resolveRequest(req: Request, res: Response): Promise<void> {
-		try {
-			const client = this.roundRobin();
-			await this.proxyRequest(req, client);
-		} catch (error) {
-			console.log(error);
-		}
-	}
-
-	private roundRobin(): net.Socket {
-		this.checkConnections();
-		if (this.currentConnection === undefined || this.currentConnection?.id === this.availableConnections.length - 1) {
-			this.currentConnection = this.availableConnections[0];
-		} else {			
-			this.currentConnection = this.availableConnections[(this.currentConnection?.id || 0) + 1];
-		}
-		return this.currentConnection.netConnection;
-	}
-
-	private checkConnections(): void {
-		this.availableConnections = [];
-		this.connections.forEach((connection) => {
-			if (!connection.netConnection.writable) {
-				connection.netConnection.destroy();
-				connection.netConnection = net.createConnection(
-					connection.port,
-					connection.host,
-					() => {}
-				);
-			}
-			this.availableConnections.push(connection);
-		});
-	}
+    private parseRequest(req: Request) {
+        return {
+            'body': req.body,
+            'url': req.url,
+            'method': req.method,
+            'headers': req.headers
+        }
+    }
 }

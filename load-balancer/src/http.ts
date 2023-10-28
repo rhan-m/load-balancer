@@ -1,63 +1,57 @@
-import { Request, Response, Express } from 'express';
-import 'dotenv/config';
-import { LoadBalancer } from './loadbalancer';
+import { LoadBalancer } from "./loadbalancer";
+import { Request, Response } from 'express';
+import net from 'net';
 
 interface ConnectionInfo {
-    host: string,
-    id: number;
+	host: string;
+	id: number;
 }
 
-export class HTTPLoadBalancer implements LoadBalancer {
-    private PORT = process.env.PORT;
-    private currentHost: ConnectionInfo | undefined;
-    private hosts: string[] = [];
-    private availableHosts: ConnectionInfo[] = [];
-	private currentConnectionId = 0;
+export class HTTPLoadBalancer implements LoadBalancer{
+    private current_connection_id = 0;
+    private available_connections: ConnectionInfo[] = [];
+    private current_connection: ConnectionInfo | undefined; 
 
-    constructor(app: Express) {
-        this.setupHosts(app);
+    constructor() {
+        this.setupConnections();
     }
 
     async resolveRequest(req: Request, res: Response): Promise<void> {
-		try {
-			let host: ConnectionInfo = this.roundRobin();
-			await this.proxyRequest(req, res, host);
-		} catch (error) {
-			console.log(error);
-		}
-	}
-
-    private roundRobin(): ConnectionInfo {
-        if (this.currentHost === undefined || this.currentHost.id === this.availableHosts.length - 1) {
-            this.currentHost = this.availableHosts[0];
-        } else {
-            this.currentHost = this.availableHosts[(this.currentHost?.id || 0) + 1]
+        try {
+            let host = this.roundRobin();
+            await this.proxyRequest(res, req, host);
+        } catch (error) {
+            console.log(error);
         }
-        return this.currentHost;
-    }
-
-    private async proxyRequest(req: Request, res: Response, host: ConnectionInfo) {
-        res.setHeader('location', host.host + req.url);
-        res.end();
-    }
-
-    private setupHosts(app: Express) {
-        app.listen(this.PORT, () => {
-            console.log(`Load balancer listening on port ${this.PORT}`);
-        });
-
-        this.hosts = process.env.HTTP_HOSTS?.split(';')!;
-        this.hosts.forEach((host) => {
-            let connectionInfo =  this.hostToConnectionInfo(host);
-            this.currentConnectionId++;
-            this.availableHosts.push(connectionInfo);
-        });
     }
 
     private hostToConnectionInfo(host: string): ConnectionInfo {
         return {
             host: host,
-            id: this.currentConnectionId,
+            id: this.current_connection_id,
         }
     }
+
+    private setupConnections() {
+        let hosts = process.env.TCP_HOSTS?.split(';')!;
+        hosts.forEach(host => {
+            this.available_connections.push(this.hostToConnectionInfo(host));
+            this.current_connection_id++;
+        });
+    }
+
+    private roundRobin(): ConnectionInfo {
+        if (this.current_connection === undefined || this.current_connection.id === this.available_connections.length - 1) {
+            this.current_connection = this.available_connections[0];
+        } else {
+            this.current_connection = this.available_connections[this.current_connection.id + 1];
+        }
+        return this.current_connection;
+    }
+
+    async proxyRequest(res: Response, req: Request, host: ConnectionInfo): Promise<void> {
+        res.setHeader('location', host.host + req.url);
+        res.end();
+    }
+
 }
