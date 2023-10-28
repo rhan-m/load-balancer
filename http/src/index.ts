@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Request, Response } from "express";
 import { router } from "./router";
 import net from 'net';
 
@@ -15,7 +15,7 @@ const server = net.createServer((socket) => {
         const expressSocket = net.createConnection({ port: parseInt(PORT!) }, () => {
             expressSocket.write(`${jsonData['method']} ${jsonData['url']} HTTP/1.1\r\n`);
             Object.keys(jsonData['headers']).forEach((header) => {
-              expressSocket.write(`${header}: ${jsonData['headers'][header]}\r\n`);
+                expressSocket.write(`${header}: ${jsonData['headers'][header]}\r\n`);
             });
             expressSocket.write('\r\n');
             expressSocket.write(JSON.stringify(jsonData['body']));
@@ -45,4 +45,9 @@ app.listen(PORT, () => {
 
 server.listen(TCP_PORT, () => {
     console.log(`TCP socket server is running on port: ${TCP_PORT}`);
+});
+
+app.use((req: Request, res: Response, next) => {
+    console.log(`Received ${req.method} request on ${req.url}`);
+    next();
 });

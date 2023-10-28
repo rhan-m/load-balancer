@@ -1,6 +1,5 @@
 import { LoadBalancer } from "./loadbalancer";
 import { Request, Response } from 'express';
-import net from 'net';
 
 interface ConnectionInfo {
 	host: string;
@@ -10,7 +9,7 @@ interface ConnectionInfo {
 export class HTTPLoadBalancer implements LoadBalancer{
     private current_connection_id = 0;
     private available_connections: ConnectionInfo[] = [];
-    private current_connection: ConnectionInfo | undefined; 
+    private current_connection: ConnectionInfo | undefined;
 
     constructor() {
         this.setupConnections();
@@ -33,7 +32,7 @@ export class HTTPLoadBalancer implements LoadBalancer{
     }
 
     private setupConnections() {
-        let hosts = process.env.TCP_HOSTS?.split(';')!;
+        let hosts = process.env.HTTP_HOSTS?.split(';')!;
         hosts.forEach(host => {
             this.available_connections.push(this.hostToConnectionInfo(host));
             this.current_connection_id++;
@@ -50,8 +49,10 @@ export class HTTPLoadBalancer implements LoadBalancer{
     }
 
     async proxyRequest(res: Response, req: Request, host: ConnectionInfo): Promise<void> {
-        res.setHeader('location', host.host + req.url);
-        res.end();
+        const redirectUrl = `http://${host.host.toString()}${req.url.toString()}`;
+        res.redirect(301, redirectUrl);
+        console.log(redirectUrl)
+        
     }
 
 }
