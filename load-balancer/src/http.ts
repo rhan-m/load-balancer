@@ -1,5 +1,6 @@
 import { LoadBalancer } from "./loadbalancer";
 import { Request, Response } from 'express';
+import { SetupError, RuntimeError } from "./customerror";
 
 interface ConnectionInfo {
 	host: string;
@@ -7,9 +8,9 @@ interface ConnectionInfo {
 }
 
 export class HTTPLoadBalancer implements LoadBalancer{
-    private current_connection_id = 0;
-    private available_connections: ConnectionInfo[] = [];
-    private current_connection: ConnectionInfo | undefined;
+    private hostConnectionCounter = 0;
+    private connections: ConnectionInfo[] = [];
+    private candidateConnection: ConnectionInfo | undefined;
 
     constructor() {
         this.setupConnections();
@@ -20,39 +21,41 @@ export class HTTPLoadBalancer implements LoadBalancer{
             let host = this.roundRobin();
             await this.proxyRequest(res, req, host);
         } catch (error) {
-            console.log(error);
+            throw new RuntimeError("There was a problem resolving your request", 500);
         }
     }
 
     private hostToConnectionInfo(host: string): ConnectionInfo {
         return {
             host: host,
-            id: this.current_connection_id,
+            id: this.hostConnectionCounter,
         }
     }
 
     private setupConnections() {
-        let hosts = process.env.HTTP_HOSTS?.split(';')!;
-        hosts.forEach(host => {
-            this.available_connections.push(this.hostToConnectionInfo(host));
-            this.current_connection_id++;
-        });
+        if (process.env.HTTP_HOSTS !== undefined) {
+            let hosts = process.env.HTTP_HOSTS.split(';');
+            hosts.forEach(host => {
+                this.connections.push(this.hostToConnectionInfo(host));
+                this.hostConnectionCounter++;
+            });
+        } else {
+            throw new SetupError("A host was not provided", 500);
+        }
     }
 
     private roundRobin(): ConnectionInfo {
-        if (this.current_connection === undefined || this.current_connection.id === this.available_connections.length - 1) {
-            this.current_connection = this.available_connections[0];
+        if (this.candidateConnection === undefined || this.candidateConnection.id === this.connections.length - 1) {
+            this.candidateConnection = this.connections[0];
         } else {
-            this.current_connection = this.available_connections[this.current_connection.id + 1];
+            this.candidateConnection = this.connections[this.candidateConnection.id + 1];
         }
-        return this.current_connection;
+        return this.candidateConnection;
     }
 
     async proxyRequest(res: Response, req: Request, host: ConnectionInfo): Promise<void> {
         const redirectUrl = `http://${host.host.toString()}${req.url.toString()}`;
         res.redirect(301, redirectUrl);
-        console.log(redirectUrl)
-        
     }
 
 }

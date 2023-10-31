@@ -8,6 +8,6 @@
     "shared"
   ],
   "dependencies": {
-    "http-proxy": "^1.18.1"
+    "winston": "^3.11.0"
   }
 }

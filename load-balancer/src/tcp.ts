@@ -1,89 +1,107 @@
 import { LoadBalancer } from "./loadbalancer";
 import { Request, Response } from 'express';
 import net from 'net';
-
+import { RuntimeError, SetupError } from "./customerror";
 
 interface ConnectionInfo {
 	host: string;
-	netConnection: net.Socket;
+	netConnection: net.Socket | undefined;
 	id: number;
 	port: number
 }
 
 export class TCPLoadBalancer implements LoadBalancer {
-    private current_connection_id = 0;
+    private hostConnectionCounter = 0;
     private connections: ConnectionInfo[] = [];
-    private available_connections: ConnectionInfo[] = [];
-    private current_connection: ConnectionInfo | undefined; 
+    private candidateConnection: ConnectionInfo | undefined; 
 
     constructor() {
         this.setupConnections();
     }
 
     private setupConnections() {
-        let hosts = process.env.TCP_HOSTS?.split(';')!;
-        this.establishConnections(hosts);
+        this.parseHosts();
+        this.establishConnections();
+
     }
 
-    private establishConnections(hosts: string[]) {
-        hosts.forEach(host => {
-            let info = host.split(':');
-            let parsedPort = Number.parseInt(info[1]);
-            let parsedHost = info[0];
-            let connection = net.createConnection(parsedPort, parsedHost, () => {		
+    private hostToConnectionInfo(host: string, port: number): ConnectionInfo {
+        return {
+            host: host,
+            netConnection: undefined,
+            id: this.hostConnectionCounter,
+            port: port
+        }
+    }
+
+    private parseHosts() {
+        if (process.env.TCP_HOSTS !== undefined) {
+            let hosts = process.env.TCP_HOSTS.split(';');
+            hosts.forEach(host => {
+                let info = host.split(':');
+                if (info.length > 1) {
+                    let parsedPort = Number.parseInt(info[1]);
+                    let parsedHost = info[0];
+                    this.connections.push(this.hostToConnectionInfo(parsedHost, parsedPort));
+                    this.hostConnectionCounter++;
+                } else {
+                    throw new SetupError("The provided host is bad formatted, the correct format is: <host>:<port>", 500);
+                }
             });
-            this.connections.push({
-                host: parsedHost,
-                netConnection: connection,
-                id: this.current_connection_id,
-                port: parsedPort
+        } else {
+            throw new SetupError("A host was not provided", 500);
+        }
+    }
+
+    private establishConnections() {
+        this.connections.forEach(connection => {
+            connection.netConnection = net.createConnection(connection.port, connection.host, () => {		
             });
-            this.current_connection_id++;
         });
     }
 
-    private async proxyRequest(req: Request, client: net.Socket) {
-        client.write(JSON.stringify(this.parseRequest(req)));
+    private async proxyRequest(req: Request, host: net.Socket) {
+        host.write(JSON.stringify(this.parseRequest(req)));
         try {
-            const data = await this.waitForData(client);
+            const data = await this.waitForData(host);
             req.socket.write(data);
         } catch (error) {
-            console.log(error);
+            throw new RuntimeError("There was a problem proxying your request", 500);
         }
     }
-    
     
     async resolveRequest(req: Request, res: Response): Promise<void> {
         try {
-            let client = this.roundRobin();
-            await this.proxyRequest(req, client);
+            const host = this.roundRobin();
+            await this.proxyRequest(req, host);
         } catch (error) {
-            console.log(error);
+            throw new RuntimeError("There was a problem resolving your request", 500);
         }
     }
-    
+
     private roundRobin(): net.Socket {
         this.checkConnections();
-        if (this.current_connection === undefined || this.current_connection.id === this.available_connections.length - 1) {
-            this.current_connection = this.available_connections[0];
+        if (this.candidateConnection === undefined || this.candidateConnection.id === this.connections.length - 1) {
+            this.candidateConnection = this.connections[0];
         } else {
-            this.current_connection = this.available_connections[this.current_connection.id + 1];
+            this.candidateConnection = this.connections[this.candidateConnection.id + 1];
         }
-        return this.current_connection.netConnection;
+        if (this.candidateConnection.netConnection) {
+            return this.candidateConnection.netConnection;
+        } else {
+            throw new RuntimeError("There are no available connections", 500);
+        }
     }
-    
+
     private checkConnections() {
-        this.available_connections = []
         this.connections.forEach(connection => {
-            if(!connection.netConnection.writable) {
+            if(connection.netConnection !== undefined && !connection.netConnection.writable) {
                 connection.netConnection.destroy();
                 connection.netConnection = net.createConnection(connection.port, connection.host, () => {		
                 });
             }
-            this.available_connections.push(connection);
         })
     }
-
 
     private waitForData(client: net.Socket): Promise<Buffer> {
         return new Promise((resolve) => {
