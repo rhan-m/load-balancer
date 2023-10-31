@@ -1,4 +1,5 @@
 packages:
   - "http"
   - "load-balancer"
+  - "connection-pool"
   - "shared"

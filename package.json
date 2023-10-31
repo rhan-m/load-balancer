@@ -5,6 +5,7 @@
   "workspaces": [
     "http",
     "load-balancer",
+    "connection-pool",
     "shared"
   ],
   "dependencies": {

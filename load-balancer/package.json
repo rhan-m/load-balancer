@@ -10,10 +10,12 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@connection-pool/connection-pool": "workspace:^",
+    "@shared/shared": "workspace:^",
     "@types/express": "^4.17.20",
-        "dotenv": "^16.3.1",
+    "dotenv": "^16.3.1",
     "express": "^4.18.2",
-        "http-proxy-middleware": "^2.0.6"
+    "http-proxy-middleware": "^2.0.6"
   },
   "devDependencies": {
     "@types/node": "^20.8.8"

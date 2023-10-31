@@ -1,19 +1,14 @@
 import { LoadBalancer } from "./loadbalancer";
 import { Request, Response } from 'express';
-import { SetupError, RuntimeError } from "./customerror";
-
-interface ConnectionInfo {
-	host: string;
-	id: number;
-}
+import { SetupError, RuntimeError } from "@shared/shared";
+import { ConnectionPoolManager } from '@connection-pool/connection-pool';
 
 export class HTTPLoadBalancer implements LoadBalancer{
-    private hostConnectionCounter = 0;
-    private connections: ConnectionInfo[] = [];
-    private candidateConnection: ConnectionInfo | undefined;
+    private connectionPoolManger!: ConnectionPoolManager;
+    private connectionId: number | undefined;
 
-    constructor() {
-        this.setupConnections();
+    constructor(protocol: string) {
+        this.setupConnections(protocol);
     }
 
     async resolveRequest(req: Request, res: Response): Promise<void> {
@@ -25,36 +20,31 @@ export class HTTPLoadBalancer implements LoadBalancer{
         }
     }
 
-    private hostToConnectionInfo(host: string): ConnectionInfo {
-        return {
-            host: host,
-            id: this.hostConnectionCounter,
-        }
-    }
-
-    private setupConnections() {
+    private setupConnections(protocol: string) {
         if (process.env.HTTP_HOSTS !== undefined) {
-            let hosts = process.env.HTTP_HOSTS.split(';');
-            hosts.forEach(host => {
-                this.connections.push(this.hostToConnectionInfo(host));
-                this.hostConnectionCounter++;
-            });
+            this.connectionPoolManger = new ConnectionPoolManager(protocol, process.env.HTTP_HOSTS.split(';'));
         } else {
             throw new SetupError("A host was not provided", 500);
         }
     }
 
-    private roundRobin(): ConnectionInfo {
-        if (this.candidateConnection === undefined || this.candidateConnection.id === this.connections.length - 1) {
-            this.candidateConnection = this.connections[0];
-        } else {
-            this.candidateConnection = this.connections[this.candidateConnection.id + 1];
+    private roundRobin(): string {
+        if (this.connectionId === undefined) {
+            this.connectionId = 0;
         }
-        return this.candidateConnection;
+        const previousConnectionId: number = this.connectionId;
+        while (!this.connectionPoolManger.connectionPool.connections[this.connectionId].available) {
+            this.connectionId++;
+            if (previousConnectionId === this.connectionId) {
+                throw new RuntimeError("No available conneciton", 500);
+            }
+        }
+        return this.connectionPoolManger.connectionPool.connections[this.connectionId].host 
+        + ':' + this.connectionPoolManger.connectionPool.connections[this.connectionId].port;
     }
 
-    async proxyRequest(res: Response, req: Request, host: ConnectionInfo): Promise<void> {
-        const redirectUrl = `http://${host.host.toString()}${req.url.toString()}`;
+    async proxyRequest(res: Response, req: Request, host: string): Promise<void> {
+        const redirectUrl = `http://${host}${req.url.toString()}`;
         res.redirect(301, redirectUrl);
     }
 

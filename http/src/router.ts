@@ -11,3 +11,11 @@ router.get('/', (req: Request, res: Response) => {
         res.status(500).send('Internal Server Error');
     }
 });
+
+router.get('/health', (req: Request, res: Response) => {
+    try {
+        res.status(OK_STATUS).send("UP");
+    } catch (error) {
+        res.status(500).send('Internal Server Error');
+    }
+});

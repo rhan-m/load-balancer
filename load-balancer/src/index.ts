@@ -4,22 +4,24 @@ import { LoadBalancer } from './loadbalancer';
 import { TCPLoadBalancer } from './tcp';
 import { HTTPLoadBalancer } from './http';
 import { errorHandler } from './errorhandler';
-import { getLogger } from './logger';
+import { getLogger } from '@shared/shared';
 
 
 const PAGE_NOT_FOUND_STATUS = 404;
 const PORT = process.env.PORT;
 const protocol = process.env.PROTOCOL;
+
 const logger = getLogger('main');
+const app = express();
 
 const loadBalancer: LoadBalancer = (() => {
 	if (protocol?.toLowerCase() === 'tcp') {
-		return new TCPLoadBalancer();
+		return new TCPLoadBalancer(protocol);
 	} else {
-		return new HTTPLoadBalancer();
+		return new HTTPLoadBalancer(protocol!);
 	}
 })();
-const app = express();
+
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
