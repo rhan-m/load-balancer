@@ -23,13 +23,11 @@ export class TCPLoadBalancer implements LoadBalancer {
         this.connectionPoolManger = new ConnectionPoolManager(protocol, hosts);
     }
 
-    private async proxyRequest(req: Request, host: net.Socket) {
-        host.setKeepAlive(true, 60000);
+    private async proxyRequest(req: Request, host: net.Socket, res: Response) {
         host.write(JSON.stringify(this.parseRequest(req)));
         try {
             const data = await this.waitForData(host);
-            req.socket.write(data);
-            logger.info("Received data on TCP");
+            this.parseResponse(data.toString(), res);
         } catch (error) {
             throw new RuntimeError("There was a problem proxying your request", 500);
         }
@@ -38,7 +36,7 @@ export class TCPLoadBalancer implements LoadBalancer {
     async resolveRequest(req: Request, res: Response): Promise<void> {
         try {
             const host = this.roundRobin();
-            await this.proxyRequest(req, host);
+            await this.proxyRequest(req, host, res);
         } catch (error) {
             throw new RuntimeError("There was a problem resolving your request", 500);
         }
@@ -58,12 +56,35 @@ export class TCPLoadBalancer implements LoadBalancer {
         return this.connectionPoolManger.connectionPool.connections[this.connectionId].socket!;
     }
 
-    private waitForData(client: net.Socket): Promise<Buffer> {
+    private waitForData(host: net.Socket): Promise<Buffer> {
         return new Promise((resolve) => {
-            client.on('data', (data) => {
+            host.on('data', (data) => {
                 resolve(data);
             });
         });
+    }
+
+    private parseResponse(data: string, res: Response) {
+        const [headersAndBody, responseBody] = data.split('\r\n\r\n');
+        const headers = headersAndBody.split('\r\n');
+
+        headers.forEach((header) => {
+            const [name, value] = header.split(': ');
+            if (name && value) {
+                res.setHeader(name, value);
+            }
+        });
+
+        const contentTypeHeader = headers.find(header => header.startsWith('Content-Type:'));
+        if (contentTypeHeader) {
+            const [, contentType] = contentTypeHeader.split(': ');
+            if (contentType) {
+                res.setHeader('Content-Type', contentType);
+            }
+        }
+
+        res.send(responseBody);
+        res.end();
     }
 
     private parseRequest(req: Request) {

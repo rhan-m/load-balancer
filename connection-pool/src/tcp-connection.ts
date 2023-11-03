@@ -13,9 +13,6 @@ export class TCPConnectionPool implements ConnectionPool {
         this.connections.forEach(connection => {
             connection.socket = net.createConnection(connection.port, connection.host, () => {		
             });
-
-            connection.socket.setKeepAlive(true, 60000);
-
             if (connection.socket.writable) {
                 connection.available = true;
             } else {

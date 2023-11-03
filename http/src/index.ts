@@ -2,13 +2,14 @@ import express, { Request, Response } from "express";
 import { router } from "./router";
 import { getLogger } from "@shared/shared";
 import net from 'net';
+import { Socket } from "net";
 const PORT = process.env.PORT;
 const TCP_PORT: number = parseInt(process.env.TCP_PORT!);
 
 const app = express();
 const logger = getLogger("HTTP-Server");
 
-const server = net.createServer((socket) => {
+const server = net.createServer((socket: Socket) => {
     logger.info("Client connected");
 
     socket.on("data", (data) => {
@@ -22,8 +23,9 @@ const server = net.createServer((socket) => {
             expressSocket.write(JSON.stringify(jsonData['body']));
             expressSocket.end();
         });
-        socket.pipe(expressSocket);
-        expressSocket.pipe(socket);
+        expressSocket.on('data', (data) => {
+            socket.write(data);
+        });
     });
 
     socket.on("end", () => {
