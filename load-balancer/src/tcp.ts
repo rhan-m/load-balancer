@@ -3,7 +3,7 @@ import { Request, Response } from 'express';
 import net from 'net';
 import { RuntimeError, SetupError } from "@shared/shared";
 import { ConnectionPoolManager } from "@connection-pool/connection-pool";
-import { getLogger } from "./logger";
+import { getLogger } from "@shared/shared";
 
 const logger = getLogger("TCPLoadBalancer");
 
@@ -11,9 +11,9 @@ export class TCPLoadBalancer implements LoadBalancer {
     private connectionPoolManger!: ConnectionPoolManager;
     private connectionId: number | undefined;
 
-    constructor(protocol: string) {
-        if (process.env.TCP_HOSTS !== undefined) {
-            this.setupConnections(protocol, process.env.TCP_HOSTS.split(';'));
+    constructor(protocol: string, hosts: string) {
+        if (hosts !== undefined) {
+            this.setupConnections(protocol, hosts.split(';'));
         } else {
             throw new SetupError("TCP hosts not set. eg. <host1>:<port>;<host2>:<port>", 500);
         }

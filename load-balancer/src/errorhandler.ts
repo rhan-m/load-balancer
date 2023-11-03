@@ -1,7 +1,7 @@
-import { SetupError, RuntimeError, BaseError } from './customerror';
+import { SetupError, RuntimeError, BaseError } from '@shared/shared';
 import { exit } from 'process';
 import { NextFunction, Request, Response } from 'express';
-import { getLogger } from './logger';
+import { getLogger } from '@shared/shared';
 
 const logger = getLogger('ErrorHandler');
 

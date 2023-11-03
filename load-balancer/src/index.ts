@@ -16,7 +16,7 @@ const app = express();
 
 const loadBalancer: LoadBalancer = (() => {
 	if (protocol?.toLowerCase() === 'tcp') {
-		return new TCPLoadBalancer(protocol);
+		return new TCPLoadBalancer(protocol, process.env.TCP_HOSTS!);
 	} else {
 		return new HTTPLoadBalancer(protocol!);
 	}
