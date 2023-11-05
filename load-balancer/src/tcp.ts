@@ -16,10 +16,10 @@ export class TCPLoadBalancer implements LoadBalancer {
     }
 
     private async proxyRequest(req: Request, host: net.Socket, res: Response) {
-        host.write(JSON.stringify(this.parseRequest(req)));
+        host.write(JSON.stringify(this.parseRequest(req)) + '$$END$$');
         try {
             const data = await this.waitForData(host);
-            this.parseResponse(data.toString(), res);
+            this.parseResponse(data, res);
         } catch (error) {
             throw new RuntimeError("There was a problem proxying your request", 500);
         }
@@ -62,12 +62,14 @@ export class TCPLoadBalancer implements LoadBalancer {
         return 0;
     }
 
-    private waitForData(host: net.Socket): Promise<Buffer> {
+    private waitForData(host: net.Socket): Promise<string> {
         return new Promise((resolve) => {
-            //TODO: buffered read
+            let dataBuffer: Buffer[] = [];
             host.on('data', (data) => {
-                resolve(data);
-            });
+                if (data.toString().includes("$$END$$")) {
+                    resolve(Buffer.concat(dataBuffer).toString() + data.toString().replace("$$END$$", ''));
+                }
+            })
         });
     }
 
@@ -89,7 +91,6 @@ export class TCPLoadBalancer implements LoadBalancer {
                 res.setHeader('Content-Type', contentType);
             }
         }
-
         res.send(responseBody);
         res.end();
     }

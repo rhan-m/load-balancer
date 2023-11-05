@@ -28,7 +28,6 @@ export class ConnectionPoolManager {
     private createCronJob() {
         this.cronJob = new CronJob('*/5 * * * * *', async () => {
             try {
-                logger.info("Cron Job started");
                 await this.connectionPool.checkConnections();
             } catch (e) {
                 logger.error(e);

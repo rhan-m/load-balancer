@@ -10,25 +10,33 @@ const app = express();
 const logger = getLogger("HTTP-Server");
 
 const server = net.createServer((socket: Socket) => {
-    logger.info("Client connected");
-
+    let dataBuffer: Buffer[] = []
     socket.on("data", (data) => {
-        //TODO: buffered read
-        const jsonData = JSON.parse(data.toString());
-        const expressSocket = net.createConnection({ port: parseInt(PORT!) }, () => {
-            expressSocket.write(`${jsonData['method']} ${jsonData['url']} HTTP/1.1\r\n`);
-            Object.keys(jsonData['headers']).forEach((header) => {
-                expressSocket.write(`${header}: ${jsonData['headers'][header]}\r\n`);
+        if (data.includes("$$END$$")) {
+            const jsonData = JSON.parse(Buffer.concat(dataBuffer).toString() + data.toString().replace('$$END$$', ''));
+            const expressSocket = net.createConnection({ port: parseInt(PORT!) }, () => {
+                expressSocket.write(`${jsonData['method']} ${jsonData['url']} HTTP/1.1\r\n`);
+                Object.keys(jsonData['headers']).forEach((header) => {
+                    expressSocket.write(`${header}: ${jsonData['headers'][header]}\r\n`);
+                });
+                expressSocket.write('\r\n');
+                expressSocket.write(JSON.stringify(jsonData['body']));
+                expressSocket.end();
             });
-            expressSocket.write('\r\n');
-            expressSocket.write(JSON.stringify(jsonData['body']));
-            expressSocket.end();
-        });
-        expressSocket.on('data', (data) => {
-            socket.write(data);
-        });
+    
+            let buffer: Buffer[] = [];
+            expressSocket.on('data', (data) => {
+                buffer.push(data);
+            });
+    
+            expressSocket.on('end', () => {
+                socket.write(Buffer.concat(buffer) + '$$END$$');
+            })
+        } else {
+            dataBuffer.push(data);
+        }
+        
     });
-
     socket.on("end", () => {
         logger.info("Client disconnected");
     });
