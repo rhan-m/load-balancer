@@ -9,7 +9,7 @@ export interface ConnectionInfo {
 }
 
 export interface ConnectionPool {
-    connections: ConnectionInfo[];
+    getConnections(): ConnectionInfo[];
     initiateConnections(hosts: string[]): Promise<void>;
     checkConnections(): Promise<void>;
 }

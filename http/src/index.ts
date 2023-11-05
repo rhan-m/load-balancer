@@ -13,6 +13,7 @@ const server = net.createServer((socket: Socket) => {
     logger.info("Client connected");
 
     socket.on("data", (data) => {
+        //TODO: buffered read
         const jsonData = JSON.parse(data.toString());
         const expressSocket = net.createConnection({ port: parseInt(PORT!) }, () => {
             expressSocket.write(`${jsonData['method']} ${jsonData['url']} HTTP/1.1\r\n`);

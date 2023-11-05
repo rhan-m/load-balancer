@@ -5,13 +5,13 @@ import { HttpConnectionPool } from './http-connection';
 import { getLogger } from '@shared/shared';
 import 'dotenv/config';
 
-const logger = getLogger('MainConnectionManager');
+const logger = getLogger('ConnectionPoolManager');
 
 export class ConnectionPoolManager {
     connectionPool!: ConnectionPool;
     cronJob!: CronJob;
 
-    constructor(protocol: string, hosts: string[]) {
+    init(protocol: string, hosts: string[]) {
         this.createConnectionPool(protocol, hosts);
         this.connectionPool.initiateConnections(hosts);
         this.createCronJob();
@@ -26,14 +26,14 @@ export class ConnectionPoolManager {
     }
 
     private createCronJob() {
-        this.cronJob = new CronJob('0/30 * * * * *', async () => {
+        this.cronJob = new CronJob('*/5 * * * * *', async () => {
             try {
-                logger.info("Cron Job started")
+                logger.info("Cron Job started");
                 await this.connectionPool.checkConnections();
             } catch (e) {
                 logger.error(e);
             }
         });
+        this.cronJob.start();
     }
-
 }

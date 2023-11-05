@@ -1,26 +1,18 @@
 import { LoadBalancer } from "./loadbalancer";
 import { Request, Response } from 'express';
-import net from 'net';
-import { RuntimeError, SetupError } from "@shared/shared";
+import { RuntimeError } from "@shared/shared";
 import { ConnectionPoolManager } from "@connection-pool/connection-pool";
 import { getLogger } from "@shared/shared";
+import net from 'net';
 
 const logger = getLogger("TCPLoadBalancer");
 
 export class TCPLoadBalancer implements LoadBalancer {
-    private connectionPoolManger!: ConnectionPoolManager;
+    private connectionPoolManger: ConnectionPoolManager;
     private connectionId: number | undefined;
 
-    constructor(protocol: string, hosts: string) {
-        if (hosts !== undefined) {
-            this.setupConnections(protocol, hosts.split(';'));
-        } else {
-            throw new SetupError("TCP hosts not set. eg. <host1>:<port>;<host2>:<port>", 500);
-        }
-    }
-
-    private setupConnections(protocol: string, hosts: string[]) {
-        this.connectionPoolManger = new ConnectionPoolManager(protocol, hosts);
+    constructor(connectionPoolManager: ConnectionPoolManager) {
+        this.connectionPoolManger = connectionPoolManager;
     }
 
     private async proxyRequest(req: Request, host: net.Socket, res: Response) {
@@ -35,29 +27,44 @@ export class TCPLoadBalancer implements LoadBalancer {
 
     async resolveRequest(req: Request, res: Response): Promise<void> {
         try {
-            const host = this.roundRobin();
+            const host = this.roundRobin(req.socket.remoteAddress);
             await this.proxyRequest(req, host, res);
         } catch (error) {
             throw new RuntimeError("There was a problem resolving your request", 500);
         }
     }
 
-    private roundRobin(): net.Socket {
-        if (this.connectionId === undefined) {
-            this.connectionId = 0;
-        }
-        const previousConnectionId: number = this.connectionId;
-        while (!this.connectionPoolManger.connectionPool.connections[this.connectionId].available) {
-            this.connectionId++;
-            if (previousConnectionId === this.connectionId) {
-                throw new RuntimeError("No available conneciton", 500);
+    private roundRobin(reqIp: string | undefined): net.Socket {
+        this.connectionId = Math.abs(this.hashCode(reqIp) % this.connectionPoolManger.connectionPool.getConnections().length);
+
+        if (!this.connectionPoolManger.connectionPool.getConnections()[this.connectionId].available) {
+            let newConnectionId = 0;
+            while (!this.connectionPoolManger.connectionPool.getConnections()[newConnectionId].available) {
+                newConnectionId++;
+                if (newConnectionId > this.connectionPoolManger.connectionPool.getConnections().length) {
+                    throw new RuntimeError("No available conneciton", 500);
+                }
             }
+            this.connectionId = newConnectionId;
         }
-        return this.connectionPoolManger.connectionPool.connections[this.connectionId].socket!;
+
+        return this.connectionPoolManger.connectionPool.getConnections()[this.connectionId].socket!;
+    }
+
+    private hashCode(str: string | undefined): number {
+        if (str !== undefined) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) { 
+                hash = ((hash << 5) - hash) + str.charCodeAt(i); hash |= 0; 
+            } 
+            return hash; 
+        }
+        return 0;
     }
 
     private waitForData(host: net.Socket): Promise<Buffer> {
         return new Promise((resolve) => {
+            //TODO: buffered read
             host.on('data', (data) => {
                 resolve(data);
             });

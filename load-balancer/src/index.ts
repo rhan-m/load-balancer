@@ -4,8 +4,8 @@ import { LoadBalancer } from './loadbalancer';
 import { TCPLoadBalancer } from './tcp';
 import { HTTPLoadBalancer } from './http';
 import { errorHandler } from './errorhandler';
-import { getLogger } from '@shared/shared';
-
+import { SetupError, getLogger } from '@shared/shared';
+import { ConnectionPoolManager } from '@connection-pool/connection-pool';
 
 const PAGE_NOT_FOUND_STATUS = 404;
 const PORT = process.env.PORT;
@@ -15,10 +15,20 @@ const logger = getLogger('main');
 const app = express();
 
 const loadBalancer: LoadBalancer = (() => {
-	if (protocol?.toLowerCase() === 'tcp') {
-		return new TCPLoadBalancer(protocol, process.env.TCP_HOSTS!);
+	if (protocol === undefined) {
+		throw new SetupError("Specify the protocol HTTP/TCP", 500);
+	}
+
+	if (process.env.HOSTS === undefined) {
+		throw new SetupError("Setup the hosts eg: <host1>:<port1>;<hots2>:<port2>;...", 500);
+	}
+
+	const connectionPoolManager: ConnectionPoolManager = new ConnectionPoolManager();
+	connectionPoolManager.init(protocol, process.env.HOSTS.split(';'));
+	if (protocol.toLowerCase() === 'tcp') {
+		return new TCPLoadBalancer(connectionPoolManager);
 	} else {
-		return new HTTPLoadBalancer(protocol!);
+		return new HTTPLoadBalancer(connectionPoolManager);
 	}
 })();
 
