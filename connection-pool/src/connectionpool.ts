@@ -1,10 +1,10 @@
 import net from 'net';
 
 export interface ConnectionInfo {
-	host: string;
-	socket: net.Socket | undefined;
-	id: number;
-	port: number;
+    host: string;
+    socket: net.Socket | undefined;
+    id: number;
+    port: number;
     available: boolean;
 }
 

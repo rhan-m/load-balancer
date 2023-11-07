@@ -19,7 +19,7 @@ export class TCPConnectionPool implements ConnectionPool {
     async initiateConnections(): Promise<void> {
         this.connections.forEach(connection => {
             try {
-                connection.socket = net.createConnection(connection.port, connection.host, () => {		
+                connection.socket = net.createConnection(connection.port, connection.host, () => {
                 });
                 connection.available = connection.socket.writable;
                 connection.socket.on('error', (error) => {
@@ -37,7 +37,7 @@ export class TCPConnectionPool implements ConnectionPool {
             if (connection.socket !== undefined && !connection.socket.writable) {
                 try {
                     connection.socket.destroy();
-                    connection.socket = net.createConnection(connection.port, connection.host, () => {                    
+                    connection.socket = net.createConnection(connection.port, connection.host, () => {
                     });
                     connection.available = connection.socket.writable;
                     connection.socket.on('error', (error) => {
@@ -56,6 +56,6 @@ export class TCPConnectionPool implements ConnectionPool {
             }
         });
     }
-    
+
 
 }

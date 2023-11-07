@@ -22,7 +22,7 @@ export class LoadBalancerService {
             if (hosts === undefined) {
                 throw new SetupError("Setup the hosts eg: <host1>:<port1>;<hots2>:<port2>;...", 500);
             }
-    
+
             const connectionPoolManager: ConnectionPoolManager = new ConnectionPoolManager();
             connectionPoolManager.init(protocol, hosts.split(';'));
             if (protocol.toLowerCase() === 'tcp') {

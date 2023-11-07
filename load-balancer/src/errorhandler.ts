@@ -14,7 +14,7 @@ export const errorHandler = (err: Error, req: Request, res: Response, next: Next
             res.status((err).statusCode).send(err.message);
         }
     } else {
-		logger.error(err.stack);
-		res.status(500).send('Something went wrong!');
-	}
+        logger.error(err.stack);
+        res.status(500).send('Something went wrong!');
+    }
 }

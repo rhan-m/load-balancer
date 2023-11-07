@@ -1,5 +1,5 @@
 import { LoadBalancer } from "./loadbalancer";
-import { Request, Response, response } from 'express';
+import { Request, Response } from 'express';
 import { RuntimeError } from "@shared/shared";
 import { ConnectionPoolManager } from '@connection-pool/connection-pool';
 import * as http from 'http'
@@ -7,20 +7,20 @@ import { getLogger } from "@shared/shared";
 
 const logger = getLogger('HTTP - LoadBalancer');
 const getOptions = ((host: string, path: string) => {
-        const hostDetails = host.split(':');
-        return {
-            hostname: hostDetails[0],
-            port: hostDetails[1],
-            path: path,
-            method: 'GET',
-            headers: {
-                'Connection': 'keep-alive',
-            }
+    const hostDetails = host.split(':');
+    return {
+        hostname: hostDetails[0],
+        port: hostDetails[1],
+        path: path,
+        method: 'GET',
+        headers: {
+            'Connection': 'keep-alive',
         }
     }
+}
 );
 
-export class HTTPLoadBalancer implements LoadBalancer{
+export class HTTPLoadBalancer implements LoadBalancer {
     private connectionPoolManger!: ConnectionPoolManager;
     private connectionId: number | undefined;
 
@@ -55,8 +55,8 @@ export class HTTPLoadBalancer implements LoadBalancer{
                 throw new RuntimeError("No available conneciton", 500);
             }
         }
-        return this.connectionPoolManger.connectionPool.getConnections()[this.connectionId].host 
-        + ':' + this.connectionPoolManger.connectionPool.getConnections()[this.connectionId].port;
+        return this.connectionPoolManger.connectionPool.getConnections()[this.connectionId].host
+            + ':' + this.connectionPoolManger.connectionPool.getConnections()[this.connectionId].port;
     }
 
     async handleGetRequest(host: string, url: string): Promise<{ data: Buffer[], status: number }> {

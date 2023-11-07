@@ -10,65 +10,72 @@ const requestRate: string | undefined = process.env.REQUEST_RATE;
 const ipRates = new Map<string, number>();
 const resetRateTimer: string | undefined = process.env.RESET_RATE_TIMER;
 
-const loadBalancer: LoadBalancer = LoadBalancerService.getLoadBalancer();
+export class RequestHandler {
+    private loadBalancer: LoadBalancer;
+    private cronJob!: CronJob;
 
-startCronJob();
-export const handleRequest = (async (req: Request, res: Response, next:NextFunction) => {
-    logger.info(`Received ${req.method} request on ${req.url}`);
-    increaseRate(req.socket.remoteAddress!);
-	if (!isValidUrl(req.url)) {
-		res.status(PAGE_NOT_FOUND_STATUS).send();
-	} else if (isRateExcedeed(req.socket.remoteAddress!)) {
-		res.status(TO_MANY_REQUESTS).send();
-    } else {
-		await loadBalancer.resolveRequest(req, res);
-		next();
-	}
-});
-
-function isValidUrl(url: String) {
-	return url === '/'
-}
-
-function increaseRate(ip: string): void {
-    let ipRate = ipRates.get(ip);
-    if (ipRate !== undefined) {
-        ipRates.set(ip, ipRate + 1)
-    } else {
-        ipRates.set(ip, 1);
+    constructor() {
+        this.loadBalancer = LoadBalancerService.getLoadBalancer();
+        this.startCronJob();
     }
-}
 
-function isRateExcedeed(ip: string): boolean {
-    if (requestRate !== undefined) {
-        const ipRate = ipRates.get(ip);
-        if (ipRate === undefined) {
-            return false;
+    private startCronJob() {
+        if (resetRateTimer === undefined) {
+            this.cronJob = new CronJob(`*/5 * * * * *`, async () => {
+                try {
+                    ipRates.clear();
+                } catch (e) {
+                    logger.error(e);
+                }
+            });
         } else {
-            return ipRate - 1 >= Number(requestRate);
+            this.cronJob = new CronJob(`* */${Number(resetRateTimer)} * * * *`, async () => {
+                try {
+                    ipRates.clear();
+                } catch (e) {
+                    logger.error(e);
+                }
+            });
+        }
+        this.cronJob.start();
+    }
+
+    private isValidUrl(url: String) {
+        return url === '/'
+    }
+
+    private increaseRate(ip: string): void {
+        let ipRate = ipRates.get(ip);
+        if (ipRate !== undefined) {
+            ipRates.set(ip, ipRate + 1)
+        } else {
+            ipRates.set(ip, 1);
         }
     }
-    return false;
-}
 
-function startCronJob() {
-    let cronJob: CronJob;
-    if (resetRateTimer === undefined) {
-        cronJob = new CronJob(`*/5 * * * * *`, async () => {
-            try {
-                ipRates.clear();
-            } catch (e) {
-                logger.error(e);
+    private isRateExcedeed(ip: string): boolean {
+        if (requestRate !== undefined) {
+            const ipRate = ipRates.get(ip);
+            if (ipRate === undefined) {
+                return false;
+            } else {
+                return ipRate - 1 >= Number(requestRate);
             }
-        });
-    } else {
-        cronJob = new CronJob(`* */${Number(resetRateTimer)} * * * *`, async () => {
-            try {
-                ipRates.clear();
-            } catch (e) {
-                logger.error(e);
-            }
-        });
+        }
+        return false;
     }
-    cronJob.start();
+
+    public async handleRequest(req: Request, res: Response, next: NextFunction) {
+        logger.info(`Received ${req.method} request on ${req.url}`);
+        this.increaseRate(req.socket.remoteAddress!);
+
+        if (this.isRateExcedeed(req.socket.remoteAddress!)) {
+            res.status(TO_MANY_REQUESTS).send();
+        } else if (!this.isValidUrl(req.url)) {
+            res.status(PAGE_NOT_FOUND_STATUS).send();
+        } else {
+            await this.loadBalancer.resolveRequest(req, res);
+            next();
+        }
+    }
 }

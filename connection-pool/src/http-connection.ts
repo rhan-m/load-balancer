@@ -27,11 +27,11 @@ export class HttpConnectionPool implements ConnectionPool {
         return this.connections;
     }
 
-    async handleCheckConnection(host: string, port: number): Promise<{status: number}> {
+    async handleCheckConnection(host: string, port: number): Promise<{ status: number }> {
         return new Promise((resolve, reject) => {
             const req = http.get(getOptions(host, port), res => {
                 let data: Buffer[] = [];
-    
+
                 res.on('data', chunk => {
                     data.push(chunk);
                 });
@@ -55,7 +55,7 @@ export class HttpConnectionPool implements ConnectionPool {
                 } else {
                     connection.available = false;
                 }
-            } catch(e) {
+            } catch (e) {
                 logger.error(e);
                 connection.available = false;
             }
