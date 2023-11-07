@@ -1,4 +1,4 @@
-import { TCPLoadBalancer } from './tcp';
+import { HTTPLoadBalancer } from './http';
 import { describe } from 'node:test';
 import { Request, Response } from 'express';
 import { ConnectionPoolManager } from '@connection-pool/connection-pool';
@@ -14,11 +14,11 @@ const mockedResponse: Response = {
 
 } as unknown as Response;
 
-describe('TCPLoadBalancer', () => {
+describe('HTTPLoadBalancer', () => {
     describe('on resolve request', () => {
         it('resolveRequest method should be called', async () => {
             const mockedConnectionPoolManager = new ConnectionPoolManager();
-            const mockedTCPLoadBalancer = new TCPLoadBalancer(mockedConnectionPoolManager);
+            const mockedTCPLoadBalancer = new HTTPLoadBalancer(mockedConnectionPoolManager);
 
             mockedConnectionPoolManager.init = jest.fn();
             mockedTCPLoadBalancer.resolveRequest = jest.fn();
