@@ -9,7 +9,6 @@ const logger = getLogger("TCPLoadBalancer");
 
 export class TCPLoadBalancer implements LoadBalancer {
     private connectionPoolManger: ConnectionPoolManager;
-    private connectionId: number | undefined;
 
     constructor(connectionPoolManager: ConnectionPoolManager) {
         this.connectionPoolManger = connectionPoolManager;
@@ -28,27 +27,20 @@ export class TCPLoadBalancer implements LoadBalancer {
     async resolveRequest(req: Request, res: Response): Promise<void> {
         try {
             const host = this.roundRobin(req.socket.remoteAddress);
-            await this.proxyRequest(req, host, res);
+            if (host !== undefined) {
+                await this.proxyRequest(req, host, res);
+            } else {
+                throw new RuntimeError("There was a problem resolving your request", 500);
+            }
         } catch (error) {
             throw new RuntimeError("There was a problem resolving your request", 500);
         }
     }
 
-    private roundRobin(reqIp: string | undefined): net.Socket {
-        this.connectionId = Math.abs(this.hashCode(reqIp) % this.connectionPoolManger.connectionPool.getConnections().length);
-
-        if (!this.connectionPoolManger.connectionPool.getConnections()[this.connectionId].available) {
-            let newConnectionId = 0;
-            while (!this.connectionPoolManger.connectionPool.getConnections()[newConnectionId].available) {
-                newConnectionId++;
-                if (newConnectionId > this.connectionPoolManger.connectionPool.getConnections().length) {
-                    throw new RuntimeError("No available conneciton", 500);
-                }
-            }
-            this.connectionId = newConnectionId;
+    private roundRobin(ip: string | undefined): net.Socket | undefined {
+        if (ip !== undefined) {
+            return this.connectionPoolManger.connectionPool.getConnections().findServer(ip)?.getSocket();
         }
-
-        return this.connectionPoolManger.connectionPool.getConnections()[this.connectionId].socket!;
     }
 
     private hashCode(str: string | undefined): number {

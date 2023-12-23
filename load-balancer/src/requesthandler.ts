@@ -40,11 +40,11 @@ export class RequestHandler {
         this.cronJob.start();
     }
 
-    private isValidUrl(url: String) {
+    private isValidUrl(url: String): boolean {
         return url === '/'
     }
 
-    private increaseRate(ip: string): void {
+    private increaseRate(ip: string) {
         let ipRate = ipRates.get(ip);
         if (ipRate !== undefined) {
             ipRates.set(ip, ipRate + 1)
@@ -65,7 +65,7 @@ export class RequestHandler {
         return false;
     }
 
-    public async handleRequest(req: Request, res: Response, next: NextFunction) {
+    public async handleRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
         logger.info(`Received ${req.method} request on ${req.url}`);
         this.increaseRate(req.socket.remoteAddress!);
 

@@ -1,5 +1,6 @@
-import { ConnectionPool, ConnectionInfo } from "./connectionpool";
-import { parseHosts } from "./utils";
+import { ConnectionPool } from "./connectionpool";
+import { HashList } from "./consistenthash";
+import { validHost } from "./utils";
 import { getLogger } from "@shared/shared";
 import * as http from 'http';
 
@@ -12,18 +13,26 @@ const getOptions = ((host: string, port: number) => {
         method: 'GET',
         headers: {
             'Connection': 'keep-alive',
-        }
+        },
+        agent: new http.Agent({ keepAlive: true }),
     }
 });
 
 export class HttpConnectionPool implements ConnectionPool {
-    private connections: ConnectionInfo[] = [];
+    private connections: HashList;
+    private hosts: string[];
 
     constructor(hosts: string[]) {
-        this.connections = parseHosts(hosts);
+        this.hosts = hosts;
+        this.connections = new HashList();
+        hosts.forEach(host => {
+            if (validHost(host)) {
+                this.connections.addNode(host);
+            }
+        });
     }
 
-    getConnections(): ConnectionInfo[] {
+    getConnections(): HashList {
         return this.connections;
     }
 
@@ -47,19 +56,22 @@ export class HttpConnectionPool implements ConnectionPool {
     }
 
     async initiateConnections(): Promise<void> {
-        this.connections.forEach(async connection => {
+        this.hosts.forEach(async host => {
             try {
-                const status = await this.handleCheckConnection(connection.host, connection.port);
+                let [ip, port] = host.split(":");
+                const status = await this.handleCheckConnection(ip, Number(port));
                 if (status.status === 200) {
-                    connection.available = true;
+                    if (!this.connections.hostExists(host)) {
+                        this.connections.addNode(host);
+                    }
                 } else {
-                    connection.available = false;
+                    this.connections.removeNode(host);
                 }
             } catch (e) {
                 logger.error(e);
-                connection.available = false;
+                this.connections.removeNode(host);
             }
-        })
+        }); 
     }
 
     async checkConnections(): Promise<void> {

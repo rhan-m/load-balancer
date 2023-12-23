@@ -8,9 +8,16 @@ importers:
 
   .:
     dependencies:
+      js-sha256:
+        specifier: ^0.10.1
+        version: 0.10.1
       winston:
         specifier: ^3.11.0
         version: 3.11.0
+    devDependencies:
+      '@types/jest':
+        specifier: ^29.5.7
+        version: 29.5.7
 
   connection-pool:
     dependencies:
@@ -38,6 +45,10 @@ importers:
       express-http-proxy:
         specifier: ^2.0.0
         version: 2.0.0
+    devDependencies:
+      jest:
+        specifier: ^29.7.0
+        version: 29.7.0(@types/node@20.8.8)
 
   http:
     dependencies:
@@ -2539,6 +2550,10 @@ packages:
       - supports-color
       - ts-node
     dev: true
+
+  /js-sha256@0.10.1:
+    resolution: {integrity: sha512-5obBtsz9301ULlsgggLg542s/jqtddfOpV5KJc4hajc9JV8GeY2gZHSVpYBn4nWqAUTJ9v+xwtbJ1mIBgIH5Vw==}
+    dev: false
 
   /js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}

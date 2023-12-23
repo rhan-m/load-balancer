@@ -1,54 +1,68 @@
-import { ConnectionPool, ConnectionInfo } from "./connectionpool";
-import { parseHosts } from "./utils";
+import { ConnectionPool } from "./connectionpool";
+import { HashList } from "./consistenthash";
+import { validHost } from "./utils";
 import { getLogger } from "@shared/shared";
 import net from 'net';
 
 const logger = getLogger('TCP-ConnectionPool');
 
 export class TCPConnectionPool implements ConnectionPool {
-    connections: ConnectionInfo[] = [];
+    connections: HashList;
+    hosts: string[];
 
     constructor(hosts: string[]) {
-        this.connections = parseHosts(hosts);
+        this.connections = new HashList();
+        this.hosts = hosts;
+        hosts.forEach(host => {
+            if (validHost(host)) {
+                this.connections.addNode(host);
+            }
+        });
     }
 
-    getConnections(): ConnectionInfo[] {
+    getConnections(): HashList {
         return this.connections;
     }
 
     async initiateConnections(): Promise<void> {
-        this.connections.forEach(connection => {
-            try {
-                connection.socket = net.createConnection(connection.port, connection.host, () => {
-                });
-                connection.available = connection.socket.writable;
-                connection.socket.on('error', (error) => {
-                    logger.error(error);
-                    connection.available = false;
-                });
-            } catch (e) {
-                logger.error(e);
+        this.hosts.forEach(host => {
+            let connectionHost = this.connections.findServer(host);
+            if (connectionHost !== undefined) {
+                let [ip, port] = host.split(":");
+                try {
+                    const connectionSocket = net.createConnection(Number(port), ip, () => {
+                    });
+                    connectionHost.setSocket(connectionSocket);
+                    connectionHost.getSocket()?.on('error', (error) => {
+                        logger.error(error);
+                        this.connections.removeNode(host);
+                    })
+                } catch(e) {
+                    logger.error(e);
+                }
+
             }
         });
     }
 
     async checkConnections(): Promise<void> {
-        this.connections.forEach(connection => {
-            if (connection.socket !== undefined && !connection.socket.writable) {
+        this.hosts.forEach(host => {
+            let connectionHost = this.connections.findServer(host);
+            if (connectionHost && connectionHost.getSocket() && !connectionHost.getSocket()?.writable) {
                 try {
-                    connection.socket.destroy();
-                    connection.socket = net.createConnection(connection.port, connection.host, () => {
-                    });
-                    connection.available = connection.socket.writable;
-                    connection.socket.on('error', (error) => {
+                    connectionHost.getSocket()?.destroy();
+                    let [ip, port] = host.split(":");
+                    connectionHost.setSocket(net.createConnection(Number(port), ip, () => {
+                    }));
+                    connectionHost.getSocket()?.on('error', (error) => {
                         logger.error(error);
-                        connection.available = false;
+                        this.connections.removeNode(host);
                     });
-                    connection.socket.on('close', () => {
-                        connection.available = false;
+                    connectionHost.getSocket()?.on('close', () => {
+                        this.connections.removeNode(host);
                     });
-                    connection.socket.on('end', () => {
-                        connection.available = false;
+                    connectionHost.getSocket()?.on('end', () => {
+                        this.connections.removeNode(host);
                     });
                 } catch (e) {
                     logger.error(e);
@@ -56,6 +70,4 @@ export class TCPConnectionPool implements ConnectionPool {
             }
         });
     }
-
-
 }

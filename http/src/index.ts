@@ -23,20 +23,21 @@ const server = net.createServer((socket: Socket) => {
                 expressSocket.write(JSON.stringify(jsonData['body']));
                 expressSocket.end();
             });
-    
+
             let buffer: Buffer[] = [];
             expressSocket.on('data', (data) => {
                 buffer.push(data);
             });
-    
+
             expressSocket.on('end', () => {
                 socket.write(Buffer.concat(buffer) + '$$END$$');
             })
         } else {
             dataBuffer.push(data);
         }
-        
+
     });
+
     socket.on("end", () => {
         logger.info("Client disconnected");
     });

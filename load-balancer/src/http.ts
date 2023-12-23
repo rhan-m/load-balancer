@@ -15,14 +15,13 @@ const getOptions = ((host: string, path: string) => {
         method: 'GET',
         headers: {
             'Connection': 'keep-alive',
-        }
+        },
+        agent: new http.Agent({ keepAlive: true }),
     }
-}
-);
+});
 
 export class HTTPLoadBalancer implements LoadBalancer {
     private connectionPoolManger!: ConnectionPoolManager;
-    private connectionId: number | undefined;
 
     constructor(connectionPoolManager: ConnectionPoolManager) {
         this.connectionPoolManger = connectionPoolManager;
@@ -30,33 +29,21 @@ export class HTTPLoadBalancer implements LoadBalancer {
 
     async resolveRequest(req: Request, res: Response): Promise<void> {
         try {
-            let host = this.roundRobin();
-            await this.proxyRequest(res, req, host);
+            let host = this.roundRobin(req.ip);
+            if (host !== undefined) {
+                await this.proxyRequest(res, req, host);
+            } else {
+                throw new RuntimeError("There was a problem resolving your request", 500);
+            }
         } catch (error) {
             throw new RuntimeError("There was a problem resolving your request", 500);
         }
     }
 
-    private roundRobin(): string {
-        if (this.connectionId === undefined || this.connectionId === this.connectionPoolManger.connectionPool.getConnections().length - 1) {
-            this.connectionId = 0;
-        } else {
-            this.connectionId++;
+    private roundRobin(ip: string | undefined): string | undefined {
+        if (ip !== undefined) {
+            return this.connectionPoolManger.connectionPool.getConnections().findServer(ip)?.getHost();
         }
-        const previousConnectionId: number = this.connectionId;
-
-        while (!this.connectionPoolManger.connectionPool.getConnections()[this.connectionId].available) {
-            if (this.connectionId === this.connectionPoolManger.connectionPool.getConnections().length - 1) {
-                this.connectionId = 0;
-            } else {
-                this.connectionId++;
-            }
-            if (previousConnectionId === this.connectionId) {
-                throw new RuntimeError("No available conneciton", 500);
-            }
-        }
-        return this.connectionPoolManger.connectionPool.getConnections()[this.connectionId].host
-            + ':' + this.connectionPoolManger.connectionPool.getConnections()[this.connectionId].port;
     }
 
     async handleGetRequest(host: string, url: string): Promise<{ data: Buffer[], status: number }> {
