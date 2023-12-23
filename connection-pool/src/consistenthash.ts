@@ -106,6 +106,7 @@ export class HashList {
 
         if (dummyHead == undefined) {
             this.head = newNode;
+            this.lenght += 1;
             return this.head;
         }
 
